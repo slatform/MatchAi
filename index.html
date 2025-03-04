@@ -12,6 +12,7 @@
             align-items: center;
             background-color: #f0f8ff;
             padding: 20px;
+            touch-action: manipulation; /* Prevents double-tap zoom on touch devices */
         }
         
         header {
@@ -23,62 +24,63 @@
             color: #2c3e50;
             margin-bottom: 10px;
         }
-
+        
         .stats {
             display: flex;
             gap: 30px;
             margin-bottom: 20px;
         }
-
+        
         .stat {
             background-color: #fff;
             padding: 10px 20px;
             border-radius: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            font-size: 18px;
         }
-
+        
         .game-grid {
             display: grid;
             gap: 10px;
             max-width: 600px;
+            width: 95%;
             margin: 0 auto;
+            aspect-ratio: 1 / 1; /* Added to make the grid square */
         }
-
+        
         .card {
             background-color: #3498db;
-            height: 100px;
-            width: 100px;
             border-radius: 5px;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
             transition: transform 0.3s, background-color 0.3s;
-            color: transparent;
+            color: transparent; /* Make symbol invisible initially */
             font-size: 24px;
             box-shadow: 0 3px 6px rgba(0,0,0,0.16);
-            user-select: none;
+            touch-action: manipulation; /* Prevents double-tap zoom on touch devices */
+            -webkit-tap-highlight-color: transparent; /* Removes tap highlight on iOS */
+            user-select: none; /* Prevents text selection */
+            /* Removed: height: 100px; width: 100px; */
         }
-
+        
         .card.flipped {
             transform: rotateY(180deg);
             background-color: #fff;
-            color: #2c3e50;
+            color: #2c3e50; /* Make symbol visible when flipped */
         }
-
+        
         .card.matched {
             background-color: #2ecc71;
             transform: rotateY(180deg);
-            color: #2c3e50;
         }
-
+        
         .controls {
             margin-top: 30px;
             display: flex;
             gap: 15px;
         }
-
+        
         button {
             padding: 10px 20px;
             background-color: #3498db;
@@ -88,123 +90,328 @@
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s;
+            touch-action: manipulation; /* Better touch response */
         }
-
+        
         button:hover {
             background-color: #2980b9;
+        }
+        
+        .level-select {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        select {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .modal h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        
+        .modal p {
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        
+        /* Responsive styles for mobile */
+        @media (max-width: 600px) {
+            .game-grid {
+                width: 95%;
+            }
+            
+            .card {
+                font-size: 18px;
+                /* Removed: height: 70px; width: 70px; */
+            }
+            
+            .stats {
+                gap: 15px;
+            }
+            
+            .stat {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            button, select {
+                font-size: 14px;
+                padding: 8px 15px;
+            }
         }
     </style>
 </head>
 <body>
     <header>
         <h1>Memory Grid Game</h1>
-        <p>Match all the pairs to win!</p>
+        <p>Match all the pairs to win! Select a level to begin.</p>
     </header>
-
+    
+    <div class="level-select">
+        <select id="level">
+            <option value="2">Level 1 (2x2)</option>
+            <option value="4">Level 2 (4x4)</option>
+            <option value="6">Level 3 (6x6)</option>
+            <option value="8">Level 4 (8x8)</option>
+        </select>
+        <button id="start-button">Start Game</button>
+    </div>
+    
     <div class="stats">
-        <div class="stat">Time: <span id="timer">0:00</span></div>
+        <div class="stat">Time: <span id="time">0</span>s</div>
+        <div class="stat">Moves: <span id="moves">0</span></div>
     </div>
     
     <div class="game-grid" id="game-grid"></div>
-
-    <button onclick="restartGame()">Restart Game</button>
+    
+    <div class="controls">
+        <button id="reset-button">Reset Game</button>
+    </div>
+    
+    <div class="modal" id="win-modal">
+        <div class="modal-content">
+            <h2>Congratulations!</h2>
+            <p>You've matched all the pairs!</p>
+            <p>Time: <span id="final-time"></span> seconds</p>
+            <p>Moves: <span id="final-moves"></span></p>
+            <button id="next-level-button">Next Level</button>
+            <button id="play-again-button">Play Again</button>
+        </div>
+    </div>
 
     <script>
+        // Game state variables
         let grid = [];
         let flippedCards = [];
         let matchedPairs = 0;
-        let symbols = ['🍎', '🍌', '🍒', '🍇', '🍊', '🍓', '🍍', '🍉'];
-        let timerElement = document.getElementById("timer");
-        let gameGrid = document.getElementById("game-grid");
-        let timer;
-        let secondsElapsed = 0;
+        let moves = 0;
         let gameStarted = false;
-
-        function startTimer() {
-            secondsElapsed = 0;
-            timerElement.textContent = "0:00";
-            timer = setInterval(() => {
-                secondsElapsed++;
-                let minutes = Math.floor(secondsElapsed / 60);
-                let seconds = secondsElapsed % 60;
-                timerElement.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-            }, 1000);
+        let gameTime = 0;
+        let timer;
+        let currentLevel = 2;
+        let symbols = ['🍎', '🍌', '🍒', '🍇', '🍊', '🍓', '🍍', '🍉', '🥑', '🥝', '🍐', '🥭', '🍋', '🍈', '🍑', '🥥', 
+                      '🌟', '🌈', '🌞', '🌙', '⚡', '❄️', '🔥', '🌊', '🌹', '🌻', '🌵', '🌴', '🦁', '🐯', '🐼', '🐬'];
+        
+        // Flag to prevent double taps
+        let processingTouch = false;
+        
+        // DOM Elements
+        const gameGrid = document.getElementById('game-grid');
+        const startButton = document.getElementById('start-button');
+        const resetButton = document.getElementById('reset-button');
+        const levelSelect = document.getElementById('level');
+        const timeDisplay = document.getElementById('time');
+        const movesDisplay = document.getElementById('moves');
+        const winModal = document.getElementById('win-modal');
+        const finalTimeDisplay = document.getElementById('final-time');
+        const finalMovesDisplay = document.getElementById('final-moves');
+        const nextLevelButton = document.getElementById('next-level-button');
+        const playAgainButton = document.getElementById('play-again-button');
+        
+        // Event Listeners
+        startButton.addEventListener('click', startGame);
+        resetButton.addEventListener('click', resetGame);
+        nextLevelButton.addEventListener('click', goToNextLevel);
+        playAgainButton.addEventListener('click', closeModal);
+        
+        // Initialize the game grid right away
+        createGrid(currentLevel);
+        
+        // Check if device is mobile for responsive sizing
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 600;
         }
-
-        function stopTimer() {
+        
+        // Functions
+        function startGame() {
+            currentLevel = parseInt(levelSelect.value);
+            resetGame();
+            gameStarted = true;
+            startTimer();
+        }
+        
+        function resetGame() {
             clearInterval(timer);
-        }
-
-        function restartGame() {
-            stopTimer();
-            gameStarted = false;
-            matchedPairs = 0;
+            gameTime = 0;
+            timeDisplay.textContent = '0';
+            moves = 0;
+            movesDisplay.textContent = '0';
             flippedCards = [];
-            createGrid();
-        }
-
-        function createGrid() {
+            matchedPairs = 0;
             gameGrid.innerHTML = '';
-            gameGrid.style.gridTemplateColumns = `repeat(4, 1fr)`;
-
-            let cardSymbols = [...symbols, ...symbols];
+            createGrid(currentLevel);
+        }
+        
+        function createGrid(size) {
+            // Clear any existing cards
+            gameGrid.innerHTML = '';
+            
+            // Adjust grid size based on level
+            gameGrid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            gameGrid.style.gridTemplateRows = `repeat(${size}, 1fr)`; // Added for equal rows
+            
+            // Removed card size calculation and inline styles
+            // Create pairs of symbols
+            const totalCards = size * size;
+            const totalPairs = totalCards / 2;
+            
+            let cardSymbols = [];
+            for (let i = 0; i < totalPairs; i++) {
+                cardSymbols.push(symbols[i]);
+                cardSymbols.push(symbols[i]);
+            }
+            
+            // Shuffle the symbols
             cardSymbols = shuffleArray(cardSymbols);
-
-            for (let i = 0; i < 16; i++) {
+            
+            // Create the cards
+            for (let i = 0; i < totalCards; i++) {
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.dataset.symbol = cardSymbols[i];
-                card.textContent = cardSymbols[i];
-
-                card.addEventListener('click', flipCard);
-                card.addEventListener('touchstart', flipCard, { passive: false });
-
+                card.dataset.index = i;
+                card.textContent = cardSymbols[i]; // Add symbol but it will be invisible initially
+                
+                // Add both click and touch events
+                card.addEventListener('click', handleCardInteraction);
+                card.addEventListener('touchstart', handleCardInteraction, { passive: true });
+                
                 gameGrid.appendChild(card);
             }
         }
-
-        function flipCard(event) {
-            event.preventDefault();
-            let card = event.target;
-
-            if (!gameStarted) {
-                gameStarted = true;
-                startTimer();
+        
+        function handleCardInteraction(event) {
+            // Prevent default behavior for touch events
+            if (event.type === 'touchstart') {
+                // Prevent double processing if both touch and click fire
+                if (processingTouch) return;
+                processingTouch = true;
+                setTimeout(() => { processingTouch = false; }, 300);
             }
-
-            if (card.classList.contains('flipped') || card.classList.contains('matched') || flippedCards.length >= 2) {
+            
+            // Proceed with card flip logic
+            flipCard.call(this);
+        }
+        
+        function flipCard() {
+            // Ignore if game not started, card is already flipped, matched, or two cards are already flipped
+            if (!gameStarted || this.classList.contains('flipped') || 
+                this.classList.contains('matched') || flippedCards.length >= 2) {
                 return;
             }
-
-            card.classList.add('flipped');
-            flippedCards.push(card);
-
+            
+            // Flip the card
+            this.classList.add('flipped');
+            flippedCards.push(this);
+            
+            // Check if two cards are flipped
             if (flippedCards.length === 2) {
-                setTimeout(checkMatch, 500);
-            }
-        }
-
-        function checkMatch() {
-            if (flippedCards[0].dataset.symbol === flippedCards[1].dataset.symbol) {
-                flippedCards[0].classList.add('matched');
-                flippedCards[1].classList.add('matched');
-                matchedPairs++;
-                if (matchedPairs === symbols.length) {
-                    stopTimer();
-                    alert(`You won! Time: ${timerElement.textContent}`);
+                moves++;
+                movesDisplay.textContent = moves;
+                
+                // Check for a match
+                if (flippedCards[0].dataset.symbol === flippedCards[1].dataset.symbol) {
+                    // We have a match
+                    setTimeout(() => {
+                        flippedCards[0].classList.add('matched');
+                        flippedCards[1].classList.add('matched');
+                        flippedCards = [];
+                        matchedPairs++;
+                        
+                        // Check for win
+                        if (matchedPairs === (currentLevel * currentLevel) / 2) {
+                            gameWon();
+                        }
+                    }, 500);
+                } else {
+                    // No match, flip back
+                    setTimeout(() => {
+                        flippedCards[0].classList.remove('flipped');
+                        flippedCards[1].classList.remove('flipped');
+                        flippedCards = [];
+                    }, 1000);
                 }
-            } else {
-                flippedCards[0].classList.remove('flipped');
-                flippedCards[1].classList.remove('flipped');
             }
-            flippedCards = [];
         }
-
+        
+        function startTimer() {
+            clearInterval(timer);
+            timer = setInterval(() => {
+                gameTime++;
+                timeDisplay.textContent = gameTime;
+            }, 1000);
+        }
+        
+        function gameWon() {
+            clearInterval(timer);
+            finalTimeDisplay.textContent = gameTime;
+            finalMovesDisplay.textContent = moves;
+            winModal.style.display = 'flex';
+        }
+        
+        function closeModal() {
+            winModal.style.display = 'none';
+            resetGame();
+        }
+        
+        function goToNextLevel() {
+            winModal.style.display = 'none';
+            if (currentLevel < 8) {
+                currentLevel += 2;
+                levelSelect.value = currentLevel;
+            }
+            resetGame();
+            gameStarted = true;
+            startTimer();
+        }
+        
+        // Utility functions
         function shuffleArray(array) {
-            return array.sort(() => Math.random() - 0.5);
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
         }
-
-        createGrid();
+        
+        // Prevent scrolling when touching the game area on mobile devices
+        document.addEventListener('touchmove', function(event) {
+            if (event.target.closest('.game-grid')) {
+                event.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
