@@ -12,7 +12,7 @@
             align-items: center;
             background-color: #f0f8ff;
             padding: 20px;
-            touch-action: manipulation; /* Prevents double-tap zoom on touch devices */
+            touch-action: manipulation;
         }
         
         header {
@@ -44,35 +44,50 @@
             max-width: 600px;
             width: 95%;
             margin: 0 auto;
-            aspect-ratio: 1 / 1; /* Added to make the grid square */
+            aspect-ratio: 1 / 1;
         }
         
         .card {
-            background-color: #3498db;
-            border-radius: 5px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.3s;
             cursor: pointer;
-            transition: transform 0.3s, background-color 0.3s;
-            color: transparent; /* Make symbol invisible initially */
-            font-size: 24px;
             box-shadow: 0 3px 6px rgba(0,0,0,0.16);
-            touch-action: manipulation; /* Prevents double-tap zoom on touch devices */
-            -webkit-tap-highlight-color: transparent; /* Removes tap highlight on iOS */
-            user-select: none; /* Prevents text selection */
-            /* Removed: height: 100px; width: 100px; */
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
         }
         
         .card.flipped {
             transform: rotateY(180deg);
-            background-color: #fff;
-            color: #2c3e50; /* Make symbol visible when flipped */
         }
         
-        .card.matched {
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 5px;
+            font-size: 24px; /* Ensure font size is sufficient */
+        }
+        
+        .card-back {
+            background-color: #3498db;
+        }
+        
+        .card-front {
+            background-color: #fff;
+            color: #2c3e50; /* Ensure symbol is visible */
+            transform: rotateY(180deg); /* Front face starts hidden */
+        }
+        
+        .card.matched .card-front {
             background-color: #2ecc71;
-            transform: rotateY(180deg);
         }
         
         .controls {
@@ -90,7 +105,6 @@
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s;
-            touch-action: manipulation; /* Better touch response */
         }
         
         button:hover {
@@ -98,8 +112,7 @@
         }
         
         .level-select {
-            margin-top: 20px;
-            margin-bottom: 20px;
+            margin: 20px 0;
         }
         
         select {
@@ -117,7 +130,6 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0,0,0,0.7);
-            z-index: 1000;
             justify-content: center;
             align-items: center;
         }
@@ -131,25 +143,9 @@
             width: 90%;
         }
         
-        .modal h2 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-        }
-        
-        .modal p {
-            margin-bottom: 20px;
-            font-size: 18px;
-        }
-        
-        /* Responsive styles for mobile */
         @media (max-width: 600px) {
-            .game-grid {
-                width: 95%;
-            }
-            
-            .card {
+            .card-face {
                 font-size: 18px;
-                /* Removed: height: 70px; width: 70px; */
             }
             
             .stats {
@@ -159,10 +155,6 @@
             .stat {
                 padding: 8px 15px;
                 font-size: 14px;
-            }
-            
-            h1 {
-                font-size: 24px;
             }
             
             button, select {
@@ -211,8 +203,6 @@
     </div>
 
     <script>
-        // Game state variables
-        let grid = [];
         let flippedCards = [];
         let matchedPairs = 0;
         let moves = 0;
@@ -221,12 +211,8 @@
         let timer;
         let currentLevel = 2;
         let symbols = ['🍎', '🍌', '🍒', '🍇', '🍊', '🍓', '🍍', '🍉', '🥑', '🥝', '🍐', '🥭', '🍋', '🍈', '🍑', '🥥', 
-                      '🌟', '🌈', '🌞', '🌙', '⚡', '❄️', '🔥', '🌊', '🌹', '🌻', '🌵', '🌴', '🦁', '🐯', '🐼', '🐬'];
+                       '🌟', '🌈', '🌞', '🌙', '⚡', '❄️', '🔥', '🌊', '🌹', '🌻', '🌵', '🌴', '🦁', '🐯', '🐼', '🐬'];
         
-        // Flag to prevent double taps
-        let processingTouch = false;
-        
-        // DOM Elements
         const gameGrid = document.getElementById('game-grid');
         const startButton = document.getElementById('start-button');
         const resetButton = document.getElementById('reset-button');
@@ -239,21 +225,13 @@
         const nextLevelButton = document.getElementById('next-level-button');
         const playAgainButton = document.getElementById('play-again-button');
         
-        // Event Listeners
         startButton.addEventListener('click', startGame);
         resetButton.addEventListener('click', resetGame);
         nextLevelButton.addEventListener('click', goToNextLevel);
         playAgainButton.addEventListener('click', closeModal);
         
-        // Initialize the game grid right away
-        createGrid(currentLevel);
-        
-        // Check if device is mobile for responsive sizing
-        function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 600;
-        }
-        
-        // Functions
+        createGrid(currentLevel); // Initialize grid
+
         function startGame() {
             currentLevel = parseInt(levelSelect.value);
             resetGame();
@@ -274,88 +252,61 @@
         }
         
         function createGrid(size) {
-            // Clear any existing cards
             gameGrid.innerHTML = '';
-            
-            // Adjust grid size based on level
             gameGrid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-            gameGrid.style.gridTemplateRows = `repeat(${size}, 1fr)`; // Added for equal rows
+            gameGrid.style.gridTemplateRows = `repeat(${size}, 1fr)`;
             
-            // Removed card size calculation and inline styles
-            // Create pairs of symbols
             const totalCards = size * size;
             const totalPairs = totalCards / 2;
-            
-            let cardSymbols = [];
-            for (let i = 0; i < totalPairs; i++) {
-                cardSymbols.push(symbols[i]);
-                cardSymbols.push(symbols[i]);
-            }
-            
-            // Shuffle the symbols
+            let cardSymbols = symbols.slice(0, totalPairs).flatMap(symbol => [symbol, symbol]);
             cardSymbols = shuffleArray(cardSymbols);
             
-            // Create the cards
             for (let i = 0; i < totalCards; i++) {
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.dataset.symbol = cardSymbols[i];
-                card.dataset.index = i;
-                card.textContent = cardSymbols[i]; // Add symbol but it will be invisible initially
                 
-                // Add both click and touch events
-                card.addEventListener('click', handleCardInteraction);
-                card.addEventListener('touchstart', handleCardInteraction, { passive: true });
+                const back = document.createElement('div');
+                back.className = 'card-face card-back';
+                
+                const front = document.createElement('div');
+                front.className = 'card-face card-front';
+                front.textContent = cardSymbols[i]; // Ensure symbol is set
+                
+                card.appendChild(back);
+                card.appendChild(front);
+                
+                card.addEventListener('click', flipCard);
+                card.addEventListener('touchstart', flipCard, { passive: true });
                 
                 gameGrid.appendChild(card);
             }
         }
         
-        function handleCardInteraction(event) {
-            // Prevent default behavior for touch events
-            if (event.type === 'touchstart') {
-                // Prevent double processing if both touch and click fire
-                if (processingTouch) return;
-                processingTouch = true;
-                setTimeout(() => { processingTouch = false; }, 300);
-            }
-            
-            // Proceed with card flip logic
-            flipCard.call(this);
-        }
-        
-        function flipCard() {
-            // Ignore if game not started, card is already flipped, matched, or two cards are already flipped
+        function flipCard(event) {
             if (!gameStarted || this.classList.contains('flipped') || 
                 this.classList.contains('matched') || flippedCards.length >= 2) {
                 return;
             }
             
-            // Flip the card
             this.classList.add('flipped');
             flippedCards.push(this);
             
-            // Check if two cards are flipped
             if (flippedCards.length === 2) {
                 moves++;
                 movesDisplay.textContent = moves;
                 
-                // Check for a match
                 if (flippedCards[0].dataset.symbol === flippedCards[1].dataset.symbol) {
-                    // We have a match
                     setTimeout(() => {
                         flippedCards[0].classList.add('matched');
                         flippedCards[1].classList.add('matched');
                         flippedCards = [];
                         matchedPairs++;
-                        
-                        // Check for win
                         if (matchedPairs === (currentLevel * currentLevel) / 2) {
                             gameWon();
                         }
                     }, 500);
                 } else {
-                    // No match, flip back
                     setTimeout(() => {
                         flippedCards[0].classList.remove('flipped');
                         flippedCards[1].classList.remove('flipped');
@@ -396,7 +347,6 @@
             startTimer();
         }
         
-        // Utility functions
         function shuffleArray(array) {
             const newArray = [...array];
             for (let i = newArray.length - 1; i > 0; i--) {
@@ -405,13 +355,6 @@
             }
             return newArray;
         }
-        
-        // Prevent scrolling when touching the game area on mobile devices
-        document.addEventListener('touchmove', function(event) {
-            if (event.target.closest('.game-grid')) {
-                event.preventDefault();
-            }
-        }, { passive: false });
     </script>
 </body>
 </html>
