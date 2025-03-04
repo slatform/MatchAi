@@ -226,6 +226,16 @@
             matchedPairs = 0;
             gameGrid.innerHTML = '';
             createGrid(currentLevel);
+            // Add touch event listener to support mobile devices
+gameGrid.addEventListener('touchstart', function (event) {
+    const touchedElement = event.target;
+    
+    // Check if the touched element is a card
+    if (touchedElement.classList.contains('card')) {
+        touchedElement.click(); // Simulate a click event
+    }
+});
+
         }
         
         function createGrid(size) {
